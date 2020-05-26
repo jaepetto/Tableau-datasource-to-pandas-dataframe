@@ -1,0 +1,10 @@
+venv
+*.log
+__pycache__
+*.hyper
+*.tds
+*.tdsx
+*.pkl
+.env
+.envrc
+.vscode
