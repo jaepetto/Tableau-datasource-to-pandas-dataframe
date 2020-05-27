@@ -10,6 +10,7 @@ import zipfile
 import pandas as pd
 import tableauserverclient as TSC
 from tableauhyperapi import Connection, HyperProcess, TableName, Telemetry
+from sqlalchemy import create_engine
 
 import settings
 
@@ -121,6 +122,32 @@ def get_columns_mappings():
     return return_value
 
 
+def __cast_tableau_date_to_datetime(tableau_date):
+    return pd.to_datetime(str(tableau_date))
+
+
+def clean_and_cast(df):
+    # Cast the Tableau Hyper date type into a 'regular' Timestamp
+    df["Exercice comptable"] = df.apply(
+        lambda x: __cast_tableau_date_to_datetime(x["Exercice comptable"]), axis=1
+    )
+
+    return df
+
+
+def upload_to_db(df):
+    engine = create_engine(
+        "postgresql://{}:{}@{}:{}/{}".format(
+            settings.DB_USERNAME,
+            settings.DB_PASSWORD,
+            settings.DB_HOST,
+            settings.DB_PORT,
+            settings.DB_SCHEMA,
+        )
+    )
+    df.to_sql(settings.DB_TABLE_SAP_FI, con=engine, if_exists="replace", index=False)
+
+
 if __name__ == "__main__":
     # download the data source from Tableau
     download_datasource()
@@ -134,7 +161,12 @@ if __name__ == "__main__":
     columns_names = []
     [columns_names.append(column["name"]) for column in columns]
     df = pd.DataFrame.from_records(rows, columns=columns_names)
-    df.to_pickle(settings.DF_PICKLE_NAME)
+
+    # clean data that may not be recognized by regular date engines
+    df = clean_and_cast(df)
+
+    # uploads the dataframe into a database for easier use
+    upload_to_db(df)
 
     # remove any temporary files
     cleanup()
